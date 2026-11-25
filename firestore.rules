@@ -1,0 +1,284 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- Validation Blueprints ---
+    function isValidBootstrap(data) {
+      return data.keys().hasAll(['initialized', 'adminUid', 'createdAt'])
+        && data.keys().hasOnly(['initialized', 'adminUid', 'createdAt'])
+        && data.initialized == true
+        && isValidId(data.adminUid)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll([
+          'uid',
+          'fullName',
+          'username',
+          'email',
+          'designation',
+          'role',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'fullName',
+          'username',
+          'email',
+          'designation',
+          'role',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120
+        && data.username is string && data.username.size() >= 1 && data.username.size() <= 60
+        && data.username.matches('^[a-z0-9._\\-]+$')
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.designation is string && data.designation.size() >= 1 && data.designation.size() <= 120
+        && data.role in ['officer', 'admin']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDuty(data) {
+      return data.keys().hasAll([
+          'userId',
+          'officerName',
+          'officerUsername',
+          'officerDesignation',
+          'officerRole',
+          'date',
+          'startTime',
+          'endTime',
+          'description',
+          'remarks',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId',
+          'officerName',
+          'officerUsername',
+          'officerDesignation',
+          'officerRole',
+          'date',
+          'startTime',
+          'endTime',
+          'description',
+          'remarks',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'submittedAt',
+          'approvedAt',
+          'approvedById',
+          'approvedByName'
+        ])
+        && isValidId(data.userId)
+        && data.officerName is string && data.officerName.size() >= 1 && data.officerName.size() <= 120
+        && data.officerUsername is string && data.officerUsername.size() >= 1 && data.officerUsername.size() <= 60
+        && data.officerUsername.matches('^[a-z0-9._\\-]+$')
+        && data.officerDesignation is string && data.officerDesignation.size() >= 1 && data.officerDesignation.size() <= 120
+        && data.officerRole in ['officer', 'admin']
+        && data.date is string && data.date.size() == 10 && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.startTime is string && data.startTime.size() == 5 && data.startTime.matches('^([01]\\d|2[0-3]):([0-5]\\d)$')
+        && data.endTime is string && data.endTime.size() == 5 && data.endTime.matches('^([01]\\d|2[0-3]):([0-5]\\d)$')
+        && data.endTime > data.startTime
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 1000
+        && data.remarks is string && data.remarks.size() <= 500
+        && data.status in ['saved', 'submitted', 'approved']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (!('submittedAt' in data) || data.submittedAt == null || data.submittedAt is timestamp)
+        && (!('approvedAt' in data) || data.approvedAt == null || data.approvedAt is timestamp)
+        && (!('approvedById' in data) || data.approvedById == null || (data.approvedById is string && data.approvedById.size() <= 128))
+        && (!('approvedByName' in data) || data.approvedByName == null || (data.approvedByName is string && data.approvedByName.size() <= 120));
+    }
+
+    // Connection check doc
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // --- System Bootstrap Marker (No PII) ---
+    match /system/{docId} {
+      allow get: if docId == 'init';
+      allow list: if false;
+      allow create: if isSignedIn()
+        && docId == 'init'
+        && !exists(/databases/$(database)/documents/system/init)
+        && isValidBootstrap(incoming())
+        && incoming().adminUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update, delete: if false;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (
+        userId == request.auth.uid || isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        resource.data.uid == request.auth.uid || isAdmin()
+      );
+
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          // Bootstrap: First admin created atomically with /system/init
+          (
+            !exists(/databases/$(database)/documents/system/init)
+            && userId == request.auth.uid
+            && incoming().role == 'admin'
+            && existsAfter(/databases/$(database)/documents/system/init)
+          )
+          // Subsequent users created by an existing Admin
+          || isAdmin()
+        );
+
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && isAdmin()
+        && incoming().uid == existing().uid
+        && incoming().username == existing().username
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (userId != request.auth.uid || incoming().role == 'admin')
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'fullName',
+          'designation',
+          'role',
+          'updatedAt'
+        ]);
+
+      allow delete: if isSignedIn()
+        && isValidId(userId)
+        && isAdmin()
+        && userId != request.auth.uid;
+    }
+
+    // --- Duties Collection ---
+    match /duties/{dutyId} {
+      allow get: if isSignedIn() && isValidId(dutyId) && (
+        existing().userId == request.auth.uid
+        || (isAdmin() && existing().officerRole == 'officer')
+      );
+
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid
+        || (isAdmin() && resource.data.officerRole == 'officer')
+      );
+
+      allow create: if isSignedIn()
+        && isValidId(dutyId)
+        && isValidDuty(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().status in ['saved', 'submitted']
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (!('approvedAt' in incoming()) || incoming().approvedAt == null)
+        && (!('approvedById' in incoming()) || incoming().approvedById == null)
+        && (!('approvedByName' in incoming()) || incoming().approvedByName == null)
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == incoming().officerRole;
+
+      allow update: if isSignedIn()
+        && isValidId(dutyId)
+        && isValidDuty(incoming())
+        && incoming().userId == existing().userId
+        && incoming().officerRole == existing().officerRole
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Officer edits an unapproved duty
+          (
+            existing().userId == request.auth.uid
+            && existing().status != 'approved'
+            && incoming().status == existing().status
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'date',
+              'startTime',
+              'endTime',
+              'description',
+              'remarks',
+              'updatedAt'
+            ])
+          )
+          // Action 2: Officer submits a saved duty for Admin approval
+          || (
+            existing().userId == request.auth.uid
+            && existing().status == 'saved'
+            && incoming().status == 'submitted'
+            && incoming().submittedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status',
+              'submittedAt',
+              'updatedAt'
+            ])
+          )
+          // Action 3: Admin approves a submitted officer duty
+          || (
+            isAdmin()
+            && existing().officerRole == 'officer'
+            && existing().status == 'submitted'
+            && incoming().status == 'approved'
+            && incoming().approvedAt == request.time
+            && incoming().approvedById == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status',
+              'approvedAt',
+              'approvedById',
+              'approvedByName',
+              'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidId(dutyId)
+        && (
+          (existing().userId == request.auth.uid && existing().status != 'approved')
+          || isAdmin()
+        );
+    }
+  }
+}

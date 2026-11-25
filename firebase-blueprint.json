@@ -1,0 +1,235 @@
+{
+  "entities": {
+    "BootstrapStatus": {
+      "title": "BootstrapStatus",
+      "description": "Single immutable initialization marker indicating that the primary administrator account has been set up.",
+      "type": "object",
+      "properties": {
+        "initialized": {
+          "type": "boolean",
+          "description": "Whether initial administrator setup has completed."
+        },
+        "adminUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the initial administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of initial setup."
+        }
+      },
+      "required": ["initialized", "adminUid", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Registered officer or administrator profile in the Planning Division Daily Duty Register.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full display name of the officer or administrator.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "username": {
+          "type": "string",
+          "description": "Unique staff username identifier.",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[a-z0-9._-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Synthetic internal auth email mapped from username for Firebase Email/Password authentication.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "designation": {
+          "type": "string",
+          "description": "Official job title or designation.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "enum": ["officer", "admin"],
+          "description": "Access control role."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-modified timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "fullName",
+        "username",
+        "email",
+        "designation",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DutyEntry": {
+      "title": "DutyEntry",
+      "description": "Individual daily duty log entry recorded by an officer.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who owns the entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "officerName": {
+          "type": "string",
+          "description": "Snapshot of the user's full name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "officerUsername": {
+          "type": "string",
+          "description": "Snapshot of the user's username.",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[a-z0-9._-]+$"
+        },
+        "officerDesignation": {
+          "type": "string",
+          "description": "Snapshot of the user's designation.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "officerRole": {
+          "type": "string",
+          "enum": ["officer", "admin"],
+          "description": "Role of the duty owner."
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Duty date in YYYY-MM-DD format.",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Start time in 24-hour HH:MM format.",
+          "minLength": 5,
+          "maxLength": 5,
+          "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "End time in 24-hour HH:MM format (must be later than startTime).",
+          "minLength": 5,
+          "maxLength": 5,
+          "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the daily duty performed.",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "remarks": {
+          "type": "string",
+          "description": "Optional remarks or output note.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["saved", "submitted", "approved"],
+          "description": "Workflow state of the duty entry."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-modified timestamp."
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when submitted for approval."
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when approved by Admin."
+        },
+        "approvedById": {
+          "type": "string",
+          "description": "Firebase Auth UID of the approving Admin.",
+          "maxLength": 128
+        },
+        "approvedByName": {
+          "type": "string",
+          "description": "Display name of the approving Admin.",
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "userId",
+        "officerName",
+        "officerUsername",
+        "officerDesignation",
+        "officerRole",
+        "date",
+        "startTime",
+        "endTime",
+        "description",
+        "remarks",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/system/{docId}": {
+      "schema": {
+        "$ref": "#/entities/BootstrapStatus"
+      },
+      "description": "Singleton initialization marker (/system/init) created atomically with the first administrator profile."
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profiles keyed by Firebase Auth UID and managed exclusively by administrators."
+    },
+    "/duties/{dutyId}": {
+      "schema": {
+        "$ref": "#/entities/DutyEntry"
+      },
+      "description": "Daily duty entries recorded by officers and approved by administrators."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Vavuniya South DS - Daily Duty Register",
+  "description": "Trilingual Daily Duty Register for the Planning Division, Divisional Secretariat Vavuniya South.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
